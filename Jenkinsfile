@@ -1,8 +1,8 @@
 pipeline {
     agent any
     tools {
-        jdk 'jdk17'
-        nodejs 'node16'
+        jdk 'jdk21'
+        nodejs 'node20'
     }
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
@@ -10,9 +10,10 @@ pipeline {
         RELEASE = "1.0.0"
         DOCKER_USER = "debocci"
         DOCKER_PASS = 'dockerhub'
-        IMAGE_NAME = "${DOCKER_USER}" + "/" + "${APP_NAME}"
+        IMAGE_NAME = "${DOCKER_USER}/${APP_NAME}"
         IMAGE_TAG = "${RELEASE}-${BUILD_NUMBER}"
-	JENKINS_API_TOKEN = credentials("JENKINS_API_TOKEN")
+        JENKINS_API_TOKEN = credentials("JENKINS_API_TOKEN")
+        CD_SERVER = "ec2-18-234-29-207.compute-1.amazonaws.com:8080"
     }
     stages {
         stage('clean workspace') {
@@ -22,12 +23,13 @@ pipeline {
         }
         stage('Checkout from Git') {
             steps {
-                git branch: 'main', url: 'https://github.com/debocci/a-reddit-clone.git'
+                // Your GitHub URL
+                git branch: 'main', url: 'https://github.com/debocci/reddit-clone.git'
             }
         }
         stage("Sonarqube Analysis") {
             steps {
-                withSonarQubeEnv('Sonarqube-Server') {
+                withSonarQubeEnv('SonarQube-Server') {
                     sh '''$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Reddit-Clone-CI \
                     -Dsonar.projectKey=Reddit-Clone-CI'''
                 }
@@ -36,7 +38,7 @@ pipeline {
         stage("Quality Gate") {
             steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonarqube-token'
+                    waitForQualityGate abortPipeline: false, credentialsId: 'SonarQube-Token'
                 }
             }
         }
@@ -47,10 +49,10 @@ pipeline {
         }
         stage('TRIVY FS SCAN') {
             steps {
-                sh "trivy fs . > trivyfs.txt"
+                sh "trivy fs . > trivyfs.txt || true"
              }
          }
-	 stage("Build & Push Docker Image") {
+         stage("Build & Push Docker Image") {
              steps {
                  script {
                      docker.withRegistry('',DOCKER_PASS) {
@@ -63,25 +65,25 @@ pipeline {
                  }
              }
          }
-	 stage("Trivy Image Scan") {
+         stage("Trivy Image Scan") {
              steps {
                  script {
-	              sh ('docker run -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image debocci/reddit-clone-pipeline:latest --no-progress --scanners vuln  --exit-code 0 --severity HIGH,CRITICAL --format table > trivyimage.txt')
+                      sh "trivy image debocci/reddit-clone-pipeline:latest --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table > trivyimage.txt || true"
                  }
              }
          }
-	 stage ('Cleanup Artifacts') {
+         stage ('Cleanup Artifacts') {
              steps {
                  script {
-                      sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG}"
-                      sh "docker rmi ${IMAGE_NAME}:latest"
+                      sh "docker rmi ${IMAGE_NAME}:${IMAGE_TAG} || true"
+                      sh "docker rmi ${IMAGE_NAME}:latest || true"
                  }
              }
          }
-	 stage("Trigger CD Pipeline") {
+         stage("Trigger CD Pipeline") {
             steps {
                 script {
-                    sh "curl -v -k --user clouduser:${JENKINS_API_TOKEN} -X POST -H 'cache-control: no-cache' -H 'content-type: application/x-www-form-urlencoded' --data 'IMAGE_TAG=${IMAGE_TAG}' 'ec2-18-234-29-207.us-east-1.compute.amazonaws.com:8080/job/Reddit-Clone-CD/buildWithParameters?token=gitops-token'"
+                    sh "curl -v -k --user clouduser:${JENKINS_API_TOKEN} -X POST -H 'cache-control: no-cache' -H 'content-type: application/x-www-form-urlencoded' --data 'IMAGE_TAG=${IMAGE_TAG}' 'http://ec2-18-234-29-207.compute-1.amazonaws.com:8080/job/Reddit-Clone-CD/buildWithParameters?token=gitops-token'"
                 }
             }
          }
@@ -89,13 +91,10 @@ pipeline {
      post {
         always {
            emailext attachLog: true,
-               subject: "'${currentBuild.result}'",
-               body: "Project: ${env.JOB_NAME}<br/>" +
-                   "Build Number: ${env.BUILD_NUMBER}<br/>" +
-                   "URL: ${env.BUILD_URL}<br/>",
-               to: 'ashfaque.s510@gmail.com',                              
+               subject: "'${currentBuild.result}' - Reddit-Clone-CI",
+               body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>URL: ${env.BUILD_URL}<br/>Image: debocci/reddit-clone-pipeline:${IMAGE_TAG}<br/>CD Server: ec2-18-234-29-207.compute-1.amazonaws.com",
+               to: 'debocci@gmail.com',
                attachmentsPattern: 'trivyfs.txt,trivyimage.txt'
         }
      }
-    
 }

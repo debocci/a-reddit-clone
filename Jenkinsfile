@@ -13,7 +13,6 @@ pipeline {
         IMAGE_NAME = "${DOCKER_USER}/${APP_NAME}"
         IMAGE_TAG = "${RELEASE}-${BUILD_NUMBER}"
         JENKINS_API_TOKEN = credentials("JENKINS_API_TOKEN")
-        CD_SERVER = "ec2-18-234-29-207.compute-1.amazonaws.com:8080"
     }
     stages {
         stage('clean workspace') {
@@ -23,13 +22,12 @@ pipeline {
         }
         stage('Checkout from Git') {
             steps {
-                // Your GitHub URL
-                git branch: 'main', url: 'https://github.com/debocci/reddit-clone.git'
+                git branch: 'main', credentialsId: 'github', url: 'https://github.com/debocci/reddit-clone.git'
             }
         }
         stage("Sonarqube Analysis") {
             steps {
-                withSonarQubeEnv('Sonarqube-server') {
+                withSonarQubeEnv('SonarQube-Server') {
                     sh '''$SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Reddit-Clone-CI \
                     -Dsonar.projectKey=Reddit-Clone-CI'''
                 }
@@ -38,7 +36,7 @@ pipeline {
         stage("Quality Gate") {
             steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonarqube-token'
+                    waitForQualityGate abortPipeline: false, credentialsId: 'SonarQube-Token'
                 }
             }
         }
@@ -68,7 +66,7 @@ pipeline {
          stage("Trivy Image Scan") {
              steps {
                  script {
-                      sh "trivy image debocci/reddit-clone-pipeline:latest --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table > trivyimage.txt || true"
+                      sh "trivy image ${DOCKER_USER}/${APP_NAME}:latest --no-progress --scanners vuln --exit-code 0 --severity HIGH,CRITICAL --format table > trivyimage.txt || true"
                  }
              }
          }

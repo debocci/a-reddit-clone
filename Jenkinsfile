@@ -81,7 +81,7 @@ pipeline {
          stage("Trigger CD Pipeline") {
             steps {
                 script {
-                    sh "curl -v -k --user Debocci:${JENKINS_API_TOKEN} -X POST -H 'cache-control: no-cache' -H 'content-type: application/x-www-form-urlencoded' --data 'IMAGE_TAG=${IMAGE_TAG}' 'http://ec2-18-234-29-207.compute-1.amazonaws.com:8080/job/Reddit-Clone-CD/buildWithParameters?token=gitops-token'"
+                    sh "curl -v -k --user Debocci:${JENKINS_API_TOKEN} -X POST -H 'cache-control: no-cache' -H 'content-type: application/x-www-form-urlencoded' --data 'IMAGE_TAG=${IMAGE_TAG}' 'http://3.93.192.83:8080/job/Reddit-Clone-CD/buildWithParameters?token=gitops-token'"
                 }
             }
          }
@@ -90,7 +90,7 @@ pipeline {
         always {
            emailext attachLog: true,
                subject: "'${currentBuild.result}' - Reddit-Clone-CI",
-               body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>URL: ${env.BUILD_URL}<br/>Image: debocci/reddit-clone-pipeline:${IMAGE_TAG}<br/>CD Server: ec2-18-234-29-207.compute-1.amazonaws.com",
+               body: "Project: ${env.JOB_NAME}<br/>Build Number: ${env.BUILD_NUMBER}<br/>URL: ${env.BUILD_URL}<br/>Image: debocci/reddit-clone-pipeline:${IMAGE_TAG}<br/>CD Server: 3.93.192.83",
                to: 'debocci@gmail.com',
                attachmentsPattern: 'trivyfs.txt,trivyimage.txt'
         }

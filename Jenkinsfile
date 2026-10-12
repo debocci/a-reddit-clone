@@ -22,7 +22,7 @@ pipeline {
         }
         stage('Checkout from Git') {
             steps {
-                git branch: 'main', credentialsId: 'github', url: 'https://github.com/debocci/reddit-clone.git'
+                git branch: 'main', credentialsId: 'github', url: 'https://github.com/debocci/a-reddit-clone.git'
             }
         }
         stage("Sonarqube Analysis") {
